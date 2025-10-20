@@ -11,9 +11,12 @@ import {
 import "./menu";
 import icon from "./assets/icon.png";
 import { getMalformedUserAgent, getUserAgent } from "./main/userAgent";
+import path from "path";
+import fs from "fs";
 import { SessionManager } from "./main/managers/SessionManager";
 import { runAutoUpdate } from "./autoUpdate";
 import { getSavedBounds, saveWindowBounds } from "./bounds";
+import { fetchGoodtubeCode, getGoodtubeCode } from "./main/goodtubeCache";
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -113,6 +116,51 @@ if (!hasSingleInstanceLock) {
     // Wait for widevine to load
     await widevine.whenReady();
     console.log("components ready:", components.status());
+    // Ensure our browsing injector preload is registered BEFORE any windows/views are created
+    const resolveInjectorPreloadPath = (): string | null => {
+      const candidates = [
+        // Dev / unpacked
+        path.join(app.getAppPath(), "src", "preload", "managers", "YouTubeInjectorPreload.js"),
+        // Packaged next to compiled files
+        path.join(__dirname, "..", "preload", "managers", "YouTubeInjectorPreload.js"),
+        // Packaged as extraResource
+        path.join(process.resourcesPath || "", "YouTubeInjectorPreload.js"),
+        path.join(process.resourcesPath || "", "preload", "managers", "YouTubeInjectorPreload.js"),
+      ];
+      try { console.log("[GoodTube] Resolving injector preload from candidates:", candidates); } catch {}
+      for (const candidate of candidates) {
+        try {
+          if (fs.existsSync(candidate)) {
+            try { console.log("[GoodTube] Using injector preload:", candidate); } catch {}
+            return candidate;
+          }
+        } catch (e) {
+          try { console.warn("[GoodTube] fs.existsSync error for", candidate, e); } catch {}
+        }
+      }
+      return null;
+    };
+
+    const injector = resolveInjectorPreloadPath();
+    if (injector) {
+      try {
+        // Electron 37 (castLabs): use registerPreloadScript/getPreloadScripts
+        session.defaultSession.registerPreloadScript({
+          id: "goodtube-injector",
+          type: "frame",
+          filePath: injector,
+        });
+        const scripts = session.defaultSession.getPreloadScripts();
+        try { console.log("[GoodTube] Registered preload scripts:", scripts); } catch {}
+      } catch (e) {
+        console.warn("[GoodTube] Failed to register preload script:", e);
+      }
+    } else {
+      console.warn("[GoodTube] Could not resolve injector preload path");
+    }
+
+    // Warm the GoodTube cache on startup; non-fatal if it fails
+    try { await fetchGoodtubeCode(); } catch {}
 
     window = createWindow();
     spoofUserAgent();
@@ -158,5 +206,32 @@ if (!hasSingleInstanceLock) {
     await session.defaultSession.clearStorageData({
       storages: ["cookies", "shadercache", "cachestorage"],
     });
+  });
+
+  // Diagnostics from GoodTube preload
+  ipcMain.on("GOODTUBE_PRELOAD_BOOTSTRAP", (_e, info) => {
+    try { console.log("[GoodTube][Preload->Main] Bootstrap:", info); } catch {}
+  });
+  ipcMain.on("GOODTUBE_PRELOAD_CODE_LEN", (_e, len) => {
+    try { console.log("[GoodTube][Preload->Main] Code length seen by preload:", len); } catch {}
+  });
+  ipcMain.on("GOODTUBE_PRELOAD_APPEND", (_e, ok) => {
+    try { console.log("[GoodTube][Preload->Main] Append result:", ok); } catch {}
+  });
+
+  // Provide GoodTube code to preload synchronously if available
+  ipcMain.on("GOODTUBE_GET_CODE", (event) => {
+    try {
+      const code = getGoodtubeCode() || "";
+      if (!code) {
+        try { console.warn("[GoodTube] Cache empty when requested by preload"); } catch {}
+      } else {
+        try { console.log("[GoodTube] Supplying cached code to preload (chars):", code.length); } catch {}
+      }
+      event.returnValue = code;
+    } catch (e) {
+      try { console.warn("[GoodTube] Failed to supply cached code:", e); } catch {}
+      event.returnValue = "";
+    }
   });
 }

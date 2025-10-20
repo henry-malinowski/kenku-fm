@@ -6,6 +6,10 @@ const config = {
     out: "./out",
     icon: "./src/assets/icon",
     appBundleId: "com.kenku.fm",
+    // Ship the injector preload file as a raw resource for production resolution
+    extraResource: [
+      path.join(__dirname, "src", "preload", "managers", "YouTubeInjectorPreload.js"),
+    ],
   },
   makers: [
     {
