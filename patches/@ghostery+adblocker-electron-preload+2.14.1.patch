@@ -1,11 +1,38 @@
 diff --git a/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs b/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs
-index 3d17784..a562cbb 100644
+index 3d17784..f260e0b 100644
 --- a/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs
 +++ b/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs
-@@ -216,6 +216,13 @@ function injectCosmeticFilters(data) {
+@@ -212,10 +212,39 @@ class DOMMonitor {
+  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+  */
+ function injectCosmeticFilters(data) {
+-    return electron.ipcRenderer.invoke('@ghostery/adblocker/inject-cosmetic-filters', window.location.href, data);
++    const startedAt = Date.now();
++    const traceEnabled = typeof process !== 'undefined'
++        && typeof process.env === 'object'
++        && process.env.ADBLOCK_TRACE === '1';
++    if (traceEnabled) {
++        console.info('[AdblockTrace][preload]', 'inject-cosmetic-filters request', data ? 'update' : 'initial');
++    }
++    return electron.ipcRenderer
++        .invoke('@ghostery/adblocker/inject-cosmetic-filters', window.location.href, data)
++        .then((result) => {
++        if (traceEnabled) {
++            console.info('[AdblockTrace][preload]', 'inject-cosmetic-filters response', `${Date.now() - startedAt}ms`);
++        }
++        return result;
++    });
  }
  if (window === window.top && window.location.href.startsWith('devtools://') === false) {
      (() => {
++        const TRACE_ENABLED = typeof process !== 'undefined'
++            && typeof process.env === 'object'
++            && process.env.ADBLOCK_TRACE === '1';
++        const trace = (...args) => {
++            if (TRACE_ENABLED) {
++                console.info('[AdblockTrace][preload]', ...args);
++            }
++        };
 +        function ignoreChannelClose(e) {
 +            if (e && typeof e.message === 'string' &&
 +                (e.message.includes('destroyed') || e.message.includes('closed'))) {
@@ -13,10 +40,11 @@ index 3d17784..a562cbb 100644
 +            }
 +            throw e;
 +        }
++        trace('preload bootstrap', window.location.href);
          let DOM_MONITOR = null;
          const unload = () => {
              if (DOM_MONITOR !== null) {
-@@ -223,7 +230,7 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+@@ -223,18 +252,19 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
                  DOM_MONITOR = null;
              }
          };
@@ -25,7 +53,11 @@ index 3d17784..a562cbb 100644
          // On DOMContentLoaded, start monitoring the DOM. This means that we will
          // first check which ids and classes exist in the DOM as a one-off operation;
          // this will allow the injection of selectors which have a chance to match.
-@@ -234,7 +241,7 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+         // We also register a MutationObserver which will monitor the addition of new
+         // classes and ids, and might trigger extra filters on a per-need basis.
+         window.addEventListener('DOMContentLoaded', () => {
++            trace('DOMContentLoaded');
+             DOM_MONITOR = new DOMMonitor((update) => {
                  if (update.type === 'features') {
                      injectCosmeticFilters({
                          ...update,
@@ -34,7 +66,7 @@ index 3d17784..a562cbb 100644
                  }
              });
              DOM_MONITOR.queryAll(window);
-@@ -242,7 +249,8 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+@@ -242,7 +272,8 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
              // need to be hidden.
              electron.ipcRenderer
                  .invoke('@ghostery/adblocker/is-mutation-observer-enabled')
@@ -45,13 +77,40 @@ index 3d17784..a562cbb 100644
          window.addEventListener('unload', unload, { once: true, passive: true });
      })();
 diff --git a/node_modules/@ghostery/adblocker-electron-preload/dist/index.js b/node_modules/@ghostery/adblocker-electron-preload/dist/index.js
-index 00907ea..20a252e 100644
+index 00907ea..979a9b6 100644
 --- a/node_modules/@ghostery/adblocker-electron-preload/dist/index.js
 +++ b/node_modules/@ghostery/adblocker-electron-preload/dist/index.js
-@@ -214,6 +214,13 @@ function injectCosmeticFilters(data) {
+@@ -210,10 +210,39 @@ class DOMMonitor {
+  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+  */
+ function injectCosmeticFilters(data) {
+-    return ipcRenderer.invoke('@ghostery/adblocker/inject-cosmetic-filters', window.location.href, data);
++    const startedAt = Date.now();
++    const traceEnabled = typeof process !== 'undefined'
++        && typeof process.env === 'object'
++        && process.env.ADBLOCK_TRACE === '1';
++    if (traceEnabled) {
++        console.info('[AdblockTrace][preload]', 'inject-cosmetic-filters request', data ? 'update' : 'initial');
++    }
++    return ipcRenderer
++        .invoke('@ghostery/adblocker/inject-cosmetic-filters', window.location.href, data)
++        .then((result) => {
++        if (traceEnabled) {
++            console.info('[AdblockTrace][preload]', 'inject-cosmetic-filters response', `${Date.now() - startedAt}ms`);
++        }
++        return result;
++    });
  }
  if (window === window.top && window.location.href.startsWith('devtools://') === false) {
      (() => {
++        const TRACE_ENABLED = typeof process !== 'undefined'
++            && typeof process.env === 'object'
++            && process.env.ADBLOCK_TRACE === '1';
++        const trace = (...args) => {
++            if (TRACE_ENABLED) {
++                console.info('[AdblockTrace][preload]', ...args);
++            }
++        };
 +        function ignoreChannelClose(e) {
 +            if (e && typeof e.message === 'string' &&
 +                (e.message.includes('destroyed') || e.message.includes('closed'))) {
@@ -59,10 +118,11 @@ index 00907ea..20a252e 100644
 +            }
 +            throw e;
 +        }
++        trace('preload bootstrap', window.location.href);
          let DOM_MONITOR = null;
          const unload = () => {
              if (DOM_MONITOR !== null) {
-@@ -221,7 +228,7 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+@@ -221,18 +250,19 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
                  DOM_MONITOR = null;
              }
          };
@@ -71,7 +131,11 @@ index 00907ea..20a252e 100644
          // On DOMContentLoaded, start monitoring the DOM. This means that we will
          // first check which ids and classes exist in the DOM as a one-off operation;
          // this will allow the injection of selectors which have a chance to match.
-@@ -232,7 +239,7 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+         // We also register a MutationObserver which will monitor the addition of new
+         // classes and ids, and might trigger extra filters on a per-need basis.
+         window.addEventListener('DOMContentLoaded', () => {
++            trace('DOMContentLoaded');
+             DOM_MONITOR = new DOMMonitor((update) => {
                  if (update.type === 'features') {
                      injectCosmeticFilters({
                          ...update,
@@ -80,7 +144,7 @@ index 00907ea..20a252e 100644
                  }
              });
              DOM_MONITOR.queryAll(window);
-@@ -240,7 +247,8 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+@@ -240,7 +270,8 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
              // need to be hidden.
              ipcRenderer
                  .invoke('@ghostery/adblocker/is-mutation-observer-enabled')

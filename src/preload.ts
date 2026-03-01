@@ -133,6 +133,9 @@ const api = {
   playerGetPreloadURL: (): string => {
     return ipcRenderer.sendSync("PLAYER_GET_PRELOAD_URL");
   },
+  browserViewGetInjectorPreloadURL: (): string | undefined => {
+    return ipcRenderer.sendSync("BROWSER_VIEW_GET_INJECTOR_PRELOAD_URL");
+  },
   /** Registers a player view with the remote manager so it can send it commands  */
   playerRegisterView: (viewId: number) => {
     ipcRenderer.send("PLAYER_REGISTER_VIEW", viewId);

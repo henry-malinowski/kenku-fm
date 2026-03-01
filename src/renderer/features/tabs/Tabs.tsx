@@ -139,12 +139,14 @@ export function Tabs() {
     });
     window.kenku.on("BROWSER_VIEW_NEW_TAB", async () => {
       const bounds = getBounds();
+      const injectorPreload = window.kenku.browserViewGetInjectorPreloadURL();
       const id = await window.kenku.createBrowserView(
         "",
         bounds.x,
         bounds.y,
         bounds.width,
         bounds.height,
+        injectorPreload,
       );
       dispatch(
         addTab({

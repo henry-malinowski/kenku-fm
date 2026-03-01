@@ -1,4 +1,6 @@
-import { BrowserWindow, ipcMain, shell, WebContentsView } from "electron";
+import { app, BrowserWindow, ipcMain, shell, WebContentsView } from "electron";
+import fs from "fs";
+import path from "path";
 import { getUserAgent } from "../userAgent";
 
 /**
@@ -37,6 +39,10 @@ export class BrowserViewManagerMain {
     ipcMain.on("BROWSER_VIEW_GO_FORWARD", this._handleGoForward);
     ipcMain.on("BROWSER_VIEW_GO_BACK", this._handleGoBack);
     ipcMain.on("BROWSER_VIEW_RELOAD", this._handleReload);
+    ipcMain.on(
+      "BROWSER_VIEW_GET_INJECTOR_PRELOAD_URL",
+      this._handleGetInjectorPreloadURL
+    );
 
     this.window.on("resize", this._resizeListener);
   }
@@ -64,6 +70,10 @@ export class BrowserViewManagerMain {
     ipcMain.off("BROWSER_VIEW_GO_FORWARD", this._handleGoForward);
     ipcMain.off("BROWSER_VIEW_GO_BACK", this._handleGoBack);
     ipcMain.off("BROWSER_VIEW_RELOAD", this._handleReload);
+    ipcMain.off(
+      "BROWSER_VIEW_GET_INJECTOR_PRELOAD_URL",
+      this._handleGetInjectorPreloadURL
+    );
 
     this.window.off("resize", this._resizeListener);
     this.removeAllBrowserViews();
@@ -159,6 +169,40 @@ export class BrowserViewManagerMain {
   _handleGoBack = (_: Electron.IpcMainEvent, id: number) => this.goBack(id);
 
   _handleReload = (_: Electron.IpcMainEvent, id: number) => this.reload(id);
+
+  _handleGetInjectorPreloadURL = (event: Electron.IpcMainEvent) => {
+    event.returnValue = this.getInjectorPreloadURL();
+  };
+
+  getInjectorPreloadURL(): string | undefined {
+    if (app.isPackaged) {
+      return path.join(process.resourcesPath, "YouTubeInjectorPreload.js");
+    }
+
+    const candidatePaths = [
+      path.join(
+        app.getAppPath(),
+        "src",
+        "preload",
+        "managers",
+        "YouTubeInjectorPreload.js"
+      ),
+      path.join(process.cwd(), "src", "preload", "managers", "YouTubeInjectorPreload.js"),
+    ];
+
+    const resolved = candidatePaths.find((candidatePath) =>
+      fs.existsSync(candidatePath)
+    );
+
+    if (!resolved) {
+      console.warn(
+        "[BrowserViewManagerMain] Could not resolve YouTube injector preload path"
+      );
+      return undefined;
+    }
+
+    return resolved;
+  }
 
   /**
    * Create a new browser view and attach it to the current window

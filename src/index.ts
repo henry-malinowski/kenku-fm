@@ -18,9 +18,8 @@ import { runAutoUpdate } from "./autoUpdate";
 import { getSavedBounds, saveWindowBounds } from "./bounds";
 import { ElectronBlocker, fullLists } from "@ghostery/adblocker-electron";
 
-// Ghostery's curated mirror of uBO/EasyList. Using fullLists only — the live
-// uBO quick-fixes.txt was found to prevent /youtubei/v1/player from being
-// called, likely due to a set-constant scriptlet zeroing out player state.
+// Ghostery's curated mirror of uBO/EasyList.
+// Note: in @ghostery/adblocker 2.14.1, fullLists includes uBO quick-fixes.txt.
 const FILTER_LISTS = fullLists;
 
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
