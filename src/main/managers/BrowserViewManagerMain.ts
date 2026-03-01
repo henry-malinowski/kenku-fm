@@ -175,8 +175,11 @@ export class BrowserViewManagerMain {
   };
 
   getInjectorPreloadURL(): string | undefined {
+    // This preload hosts the generic injector runtime plus site adapters.
+    const injectorPreloadFilename = "YouTubeInjectorPreload.js";
+
     if (app.isPackaged) {
-      return path.join(process.resourcesPath, "YouTubeInjectorPreload.js");
+      return path.join(process.resourcesPath, injectorPreloadFilename);
     }
 
     const candidatePaths = [
@@ -185,9 +188,9 @@ export class BrowserViewManagerMain {
         "src",
         "preload",
         "managers",
-        "YouTubeInjectorPreload.js"
+        injectorPreloadFilename
       ),
-      path.join(process.cwd(), "src", "preload", "managers", "YouTubeInjectorPreload.js"),
+      path.join(process.cwd(), "src", "preload", "managers", injectorPreloadFilename),
     ];
 
     const resolved = candidatePaths.find((candidatePath) =>
@@ -196,7 +199,7 @@ export class BrowserViewManagerMain {
 
     if (!resolved) {
       console.warn(
-        "[BrowserViewManagerMain] Could not resolve YouTube injector preload path"
+        "[BrowserViewManagerMain] Could not resolve injector preload path"
       );
       return undefined;
     }
