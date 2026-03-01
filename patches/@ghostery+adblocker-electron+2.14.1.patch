@@ -1,0 +1,26 @@
+diff --git a/node_modules/@ghostery/adblocker-electron/dist/commonjs/index.js b/node_modules/@ghostery/adblocker-electron/dist/commonjs/index.js
+index 78bdebe..981b2f8 100644
+--- a/node_modules/@ghostery/adblocker-electron/dist/commonjs/index.js
++++ b/node_modules/@ghostery/adblocker-electron/dist/commonjs/index.js
+@@ -173,7 +173,7 @@ class ElectronBlocker extends adblocker_1.FiltersEngine {
+             }
+             for (const script of scripts) {
+                 try {
+-                    event.sender.executeJavaScript(script, true);
++                    await event.sender.executeJavaScript('(function(){\n' + script + '\n})()', true);
+                 }
+                 catch (e) {
+                     console.error('@ghostery/adblocker scriptlet crashed', e);
+diff --git a/node_modules/@ghostery/adblocker-electron/dist/esm/index.js b/node_modules/@ghostery/adblocker-electron/dist/esm/index.js
+index 1122fac..646baee 100644
+--- a/node_modules/@ghostery/adblocker-electron/dist/esm/index.js
++++ b/node_modules/@ghostery/adblocker-electron/dist/esm/index.js
+@@ -132,7 +132,7 @@ export class ElectronBlocker extends FiltersEngine {
+             }
+             for (const script of scripts) {
+                 try {
+-                    event.sender.executeJavaScript(script, true);
++                    await event.sender.executeJavaScript('(function(){\n' + script + '\n})()', true);
+                 }
+                 catch (e) {
+                     console.error('@ghostery/adblocker scriptlet crashed', e);

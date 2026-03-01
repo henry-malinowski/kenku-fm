@@ -1,0 +1,92 @@
+diff --git a/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs b/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs
+index 3d17784..a562cbb 100644
+--- a/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs
++++ b/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs
+@@ -216,6 +216,13 @@ function injectCosmeticFilters(data) {
+ }
+ if (window === window.top && window.location.href.startsWith('devtools://') === false) {
+     (() => {
++        function ignoreChannelClose(e) {
++            if (e && typeof e.message === 'string' &&
++                (e.message.includes('destroyed') || e.message.includes('closed'))) {
++                return;
++            }
++            throw e;
++        }
+         let DOM_MONITOR = null;
+         const unload = () => {
+             if (DOM_MONITOR !== null) {
+@@ -223,7 +230,7 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+                 DOM_MONITOR = null;
+             }
+         };
+-        injectCosmeticFilters();
++        injectCosmeticFilters().catch(ignoreChannelClose);
+         // On DOMContentLoaded, start monitoring the DOM. This means that we will
+         // first check which ids and classes exist in the DOM as a one-off operation;
+         // this will allow the injection of selectors which have a chance to match.
+@@ -234,7 +241,7 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+                 if (update.type === 'features') {
+                     injectCosmeticFilters({
+                         ...update,
+-                    });
++                    }).catch(ignoreChannelClose);
+                 }
+             });
+             DOM_MONITOR.queryAll(window);
+@@ -242,7 +249,8 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+             // need to be hidden.
+             electron.ipcRenderer
+                 .invoke('@ghostery/adblocker/is-mutation-observer-enabled')
+-                .then((enableMutationObserver) => enableMutationObserver && (DOM_MONITOR === null || DOM_MONITOR === void 0 ? void 0 : DOM_MONITOR.start(window)));
++                .then((enableMutationObserver) => enableMutationObserver && (DOM_MONITOR === null || DOM_MONITOR === void 0 ? void 0 : DOM_MONITOR.start(window)))
++                .catch(ignoreChannelClose);
+         }, { once: true, passive: true });
+         window.addEventListener('unload', unload, { once: true, passive: true });
+     })();
+diff --git a/node_modules/@ghostery/adblocker-electron-preload/dist/index.js b/node_modules/@ghostery/adblocker-electron-preload/dist/index.js
+index 00907ea..20a252e 100644
+--- a/node_modules/@ghostery/adblocker-electron-preload/dist/index.js
++++ b/node_modules/@ghostery/adblocker-electron-preload/dist/index.js
+@@ -214,6 +214,13 @@ function injectCosmeticFilters(data) {
+ }
+ if (window === window.top && window.location.href.startsWith('devtools://') === false) {
+     (() => {
++        function ignoreChannelClose(e) {
++            if (e && typeof e.message === 'string' &&
++                (e.message.includes('destroyed') || e.message.includes('closed'))) {
++                return;
++            }
++            throw e;
++        }
+         let DOM_MONITOR = null;
+         const unload = () => {
+             if (DOM_MONITOR !== null) {
+@@ -221,7 +228,7 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+                 DOM_MONITOR = null;
+             }
+         };
+-        injectCosmeticFilters();
++        injectCosmeticFilters().catch(ignoreChannelClose);
+         // On DOMContentLoaded, start monitoring the DOM. This means that we will
+         // first check which ids and classes exist in the DOM as a one-off operation;
+         // this will allow the injection of selectors which have a chance to match.
+@@ -232,7 +239,7 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+                 if (update.type === 'features') {
+                     injectCosmeticFilters({
+                         ...update,
+-                    });
++                    }).catch(ignoreChannelClose);
+                 }
+             });
+             DOM_MONITOR.queryAll(window);
+@@ -240,7 +247,8 @@ if (window === window.top && window.location.href.startsWith('devtools://') ===
+             // need to be hidden.
+             ipcRenderer
+                 .invoke('@ghostery/adblocker/is-mutation-observer-enabled')
+-                .then((enableMutationObserver) => enableMutationObserver && (DOM_MONITOR === null || DOM_MONITOR === void 0 ? void 0 : DOM_MONITOR.start(window)));
++                .then((enableMutationObserver) => enableMutationObserver && (DOM_MONITOR === null || DOM_MONITOR === void 0 ? void 0 : DOM_MONITOR.start(window)))
++                .catch(ignoreChannelClose);
+         }, { once: true, passive: true });
+         window.addEventListener('unload', unload, { once: true, passive: true });
+     })();

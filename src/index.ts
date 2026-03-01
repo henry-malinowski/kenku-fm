@@ -16,7 +16,14 @@ import fs from "fs";
 import { SessionManager } from "./main/managers/SessionManager";
 import { runAutoUpdate } from "./autoUpdate";
 import { getSavedBounds, saveWindowBounds } from "./bounds";
-import { fetchGoodtubeCode, getGoodtubeCode } from "./main/goodtubeCache";
+import { ElectronBlocker, fullLists } from "@ghostery/adblocker-electron";
+
+// Ghostery's curated mirror of uBO/EasyList. Using fullLists only — the live
+// uBO quick-fixes.txt was found to prevent /youtubei/v1/player from being
+// called, likely due to a set-constant scriptlet zeroing out player state.
+const FILTER_LISTS = fullLists;
+
+const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
@@ -124,51 +131,29 @@ if (!hasSingleInstanceLock) {
       console.error("components failed to load:", JSON.stringify(e, null, 2));
     }
 
-    // Ensure our browsing injector preload is registered BEFORE any windows/views are created
-    const resolveInjectorPreloadPath = (): string | null => {
-      const candidates = [
-        // Dev / unpacked
-        path.join(app.getAppPath(), "src", "preload", "managers", "YouTubeInjectorPreload.js"),
-        // Packaged next to compiled files
-        path.join(__dirname, "..", "preload", "managers", "YouTubeInjectorPreload.js"),
-        // Packaged as extraResource
-        path.join(process.resourcesPath || "", "YouTubeInjectorPreload.js"),
-        path.join(process.resourcesPath || "", "preload", "managers", "YouTubeInjectorPreload.js"),
-      ];
-      try { console.log("[GoodTube] Resolving injector preload from candidates:", candidates); } catch {}
-      for (const candidate of candidates) {
-        try {
-          if (fs.existsSync(candidate)) {
-            try { console.log("[GoodTube] Using injector preload:", candidate); } catch {}
-            return candidate;
-          }
-        } catch (e) {
-          try { console.warn("[GoodTube] fs.existsSync error for", candidate, e); } catch {}
-        }
-      }
-      return null;
-    };
-
-    const injector = resolveInjectorPreloadPath();
-    if (injector) {
-      try {
-        // Electron 37 (castLabs): use registerPreloadScript/getPreloadScripts
-        session.defaultSession.registerPreloadScript({
-          id: "goodtube-injector",
-          type: "frame",
-          filePath: injector,
-        });
-        const scripts = session.defaultSession.getPreloadScripts();
-        try { console.log("[GoodTube] Registered preload scripts:", scripts); } catch {}
-      } catch (e) {
-        console.warn("[GoodTube] Failed to register preload script:", e);
-      }
-    } else {
-      console.warn("[GoodTube] Could not resolve injector preload path");
+    // Initialize adblocker (non-fatal if it fails)
+    // Note: enableBlockingInSession registers the ghostery preload internally —
+    // do NOT call session.registerPreloadScript separately or it runs twice.
+    try {
+      const cachePath = path.join(app.getPath("userData"), "adblocker-engine.bin");
+      const blocker = await ElectronBlocker.fromLists(
+        fetch,
+        FILTER_LISTS,
+        { enableCompression: true },
+        {
+          path: cachePath,
+          read: async (p) => {
+            const age = Date.now() - fs.statSync(p).mtimeMs;
+            if (age > CACHE_MAX_AGE_MS) throw new Error("Cache stale");
+            return fs.readFileSync(p);
+          },
+          write: async (p, data) => fs.writeFileSync(p, data),
+        },
+      );
+      blocker.enableBlockingInSession(session.defaultSession);
+    } catch (e) {
+      console.warn("[Adblocker] Failed to initialize:", e);
     }
-
-    // Warm the GoodTube cache on startup; non-fatal if it fails
-    try { await fetchGoodtubeCode(); } catch {}
 
     window = createWindow();
 
@@ -226,30 +211,4 @@ if (!hasSingleInstanceLock) {
     });
   });
 
-  // Diagnostics from GoodTube preload
-  ipcMain.on("GOODTUBE_PRELOAD_BOOTSTRAP", (_e, info) => {
-    try { console.log("[GoodTube][Preload->Main] Bootstrap:", info); } catch {}
-  });
-  ipcMain.on("GOODTUBE_PRELOAD_CODE_LEN", (_e, len) => {
-    try { console.log("[GoodTube][Preload->Main] Code length seen by preload:", len); } catch {}
-  });
-  ipcMain.on("GOODTUBE_PRELOAD_APPEND", (_e, ok) => {
-    try { console.log("[GoodTube][Preload->Main] Append result:", ok); } catch {}
-  });
-
-  // Provide GoodTube code to preload synchronously if available
-  ipcMain.on("GOODTUBE_GET_CODE", (event) => {
-    try {
-      const code = getGoodtubeCode() || "";
-      if (!code) {
-        try { console.warn("[GoodTube] Cache empty when requested by preload"); } catch {}
-      } else {
-        try { console.log("[GoodTube] Supplying cached code to preload (chars):", code.length); } catch {}
-      }
-      event.returnValue = code;
-    } catch (e) {
-      try { console.warn("[GoodTube] Failed to supply cached code:", e); } catch {}
-      event.returnValue = "";
-    }
-  });
 }
