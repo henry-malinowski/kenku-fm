@@ -1,0 +1,138 @@
+diff --git a/node_modules/@ghostery/adblocker-electron/dist/commonjs/index.js b/node_modules/@ghostery/adblocker-electron/dist/commonjs/index.js
+index 78bdebe..a214610 100644
+--- a/node_modules/@ghostery/adblocker-electron/dist/commonjs/index.js
++++ b/node_modules/@ghostery/adblocker-electron/dist/commonjs/index.js
+@@ -139,11 +139,23 @@ class ElectronBlocker extends adblocker_1.FiltersEngine {
+             return this.config.enableMutationObserver;
+         };
+         this.onInjectCosmeticFilters = async (event, url, msg) => {
++            const traceEnabled = typeof process !== 'undefined'
++                && typeof process.env === 'object'
++                && process.env.ADBLOCK_TRACE === '1';
++            const startedAt = Date.now();
+             const parsed = (0, tldts_experimental_1.parse)(url);
+             const hostname = parsed.hostname || '';
+             const domain = parsed.domain || '';
+             // `msg` is undefined for the initial call and present for subsequent updates
+             const isFirstRun = msg === undefined;
++            if (traceEnabled) {
++                console.info('[AdblockTrace][main]', 'inject-cosmetic-filters start', {
++                    url,
++                    hostname,
++                    domain,
++                    isFirstRun,
++                });
++            }
+             const { active, styles, scripts } = this.getCosmeticsFilters({
+                 domain,
+                 hostname,
+@@ -166,6 +178,9 @@ class ElectronBlocker extends adblocker_1.FiltersEngine {
+                 },
+             });
+             if (active === false) {
++                if (traceEnabled) {
++                    console.info('[AdblockTrace][main]', 'inject-cosmetic-filters inactive', `${Date.now() - startedAt}ms`);
++                }
+                 return;
+             }
+             if (styles.length > 0) {
+@@ -173,12 +188,29 @@ class ElectronBlocker extends adblocker_1.FiltersEngine {
+             }
+             for (const script of scripts) {
+                 try {
+-                    event.sender.executeJavaScript(script, true);
++                    const hadDebuggerStatement = /\bdebugger\s*;?/.test(script);
++                    const sanitizedScript = hadDebuggerStatement
++                        ? script.replace(/\bdebugger\s*;?/g, '')
++                        : script;
++                    if (hadDebuggerStatement) {
++                        console.warn('[Adblocker] Stripped debugger statement from scriptlet', {
++                            hostname,
++                            domain,
++                        });
++                    }
++                    await event.sender.executeJavaScript('(function(){\n' + sanitizedScript + '\n})()', true);
+                 }
+                 catch (e) {
+                     console.error('@ghostery/adblocker scriptlet crashed', e);
+                 }
+             }
++            if (traceEnabled) {
++                console.info('[AdblockTrace][main]', 'inject-cosmetic-filters done', {
++                    elapsedMs: Date.now() - startedAt,
++                    styles: styles.length,
++                    scripts: scripts.length,
++                });
++            }
+         };
+         this.onHeadersReceived = (details, callback) => {
+             const CSP_HEADER_NAME = 'content-security-policy';
+diff --git a/node_modules/@ghostery/adblocker-electron/dist/esm/index.js b/node_modules/@ghostery/adblocker-electron/dist/esm/index.js
+index 1122fac..917f1ff 100644
+--- a/node_modules/@ghostery/adblocker-electron/dist/esm/index.js
++++ b/node_modules/@ghostery/adblocker-electron/dist/esm/index.js
+@@ -98,11 +98,23 @@ export class ElectronBlocker extends FiltersEngine {
+             return this.config.enableMutationObserver;
+         };
+         this.onInjectCosmeticFilters = async (event, url, msg) => {
++            const traceEnabled = typeof process !== 'undefined'
++                && typeof process.env === 'object'
++                && process.env.ADBLOCK_TRACE === '1';
++            const startedAt = Date.now();
+             const parsed = parse(url);
+             const hostname = parsed.hostname || '';
+             const domain = parsed.domain || '';
+             // `msg` is undefined for the initial call and present for subsequent updates
+             const isFirstRun = msg === undefined;
++            if (traceEnabled) {
++                console.info('[AdblockTrace][main]', 'inject-cosmetic-filters start', {
++                    url,
++                    hostname,
++                    domain,
++                    isFirstRun,
++                });
++            }
+             const { active, styles, scripts } = this.getCosmeticsFilters({
+                 domain,
+                 hostname,
+@@ -125,6 +137,9 @@ export class ElectronBlocker extends FiltersEngine {
+                 },
+             });
+             if (active === false) {
++                if (traceEnabled) {
++                    console.info('[AdblockTrace][main]', 'inject-cosmetic-filters inactive', `${Date.now() - startedAt}ms`);
++                }
+                 return;
+             }
+             if (styles.length > 0) {
+@@ -132,12 +147,29 @@ export class ElectronBlocker extends FiltersEngine {
+             }
+             for (const script of scripts) {
+                 try {
+-                    event.sender.executeJavaScript(script, true);
++                    const hadDebuggerStatement = /\bdebugger\s*;?/.test(script);
++                    const sanitizedScript = hadDebuggerStatement
++                        ? script.replace(/\bdebugger\s*;?/g, '')
++                        : script;
++                    if (hadDebuggerStatement) {
++                        console.warn('[Adblocker] Stripped debugger statement from scriptlet', {
++                            hostname,
++                            domain,
++                        });
++                    }
++                    await event.sender.executeJavaScript('(function(){\n' + sanitizedScript + '\n})()', true);
+                 }
+                 catch (e) {
+                     console.error('@ghostery/adblocker scriptlet crashed', e);
+                 }
+             }
++            if (traceEnabled) {
++                console.info('[AdblockTrace][main]', 'inject-cosmetic-filters done', {
++                    elapsedMs: Date.now() - startedAt,
++                    styles: styles.length,
++                    scripts: scripts.length,
++                });
++            }
+         };
+         this.onHeadersReceived = (details, callback) => {
+             const CSP_HEADER_NAME = 'content-security-policy';

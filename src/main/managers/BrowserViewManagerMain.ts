@@ -1,6 +1,7 @@
-import { BrowserWindow, ipcMain, shell, WebContentsView, WebFrameMain } from "electron";
+import { app, BrowserWindow, ipcMain, shell, WebContentsView } from "electron";
+import fs from "fs";
+import path from "path";
 import { getUserAgent } from "../userAgent";
-import { getGoodtubeCode } from "../goodtubeCache";
 
 /**
  * Manager to help create and manager browser views
@@ -38,6 +39,10 @@ export class BrowserViewManagerMain {
     ipcMain.on("BROWSER_VIEW_GO_FORWARD", this._handleGoForward);
     ipcMain.on("BROWSER_VIEW_GO_BACK", this._handleGoBack);
     ipcMain.on("BROWSER_VIEW_RELOAD", this._handleReload);
+    ipcMain.on(
+      "BROWSER_VIEW_GET_INJECTOR_PRELOAD_URL",
+      this._handleGetInjectorPreloadURL
+    );
 
     this.window.on("resize", this._resizeListener);
   }
@@ -65,6 +70,10 @@ export class BrowserViewManagerMain {
     ipcMain.off("BROWSER_VIEW_GO_FORWARD", this._handleGoForward);
     ipcMain.off("BROWSER_VIEW_GO_BACK", this._handleGoBack);
     ipcMain.off("BROWSER_VIEW_RELOAD", this._handleReload);
+    ipcMain.off(
+      "BROWSER_VIEW_GET_INJECTOR_PRELOAD_URL",
+      this._handleGetInjectorPreloadURL
+    );
 
     this.window.off("resize", this._resizeListener);
     this.removeAllBrowserViews();
@@ -100,12 +109,6 @@ export class BrowserViewManagerMain {
       (_, url, __, isMainFrame) => {
         if (isMainFrame) {
           event.reply("BROWSER_VIEW_DID_NAVIGATE", id, url);
-          try {
-            if (this._shouldInjectURL(url)) {
-              try { console.log("[GoodTube][Inject] did-start-navigation main-frame, url:", url); } catch {}
-              this._injectGoodTubeIntoMainFrame(this.views[id].webContents);
-            }
-          } catch {}
         }
       }
     );
@@ -134,64 +137,6 @@ export class BrowserViewManagerMain {
       }
     });
 
-    // Execute GoodTube in the main frame as early as possible once DOM is ready
-    this.views[id].webContents.on("dom-ready", () => {
-      try {
-        const wc = this.views[id].webContents;
-        const url = wc.getURL();
-        if (this._shouldInjectURL(url)) {
-          try { console.log("[GoodTube][Inject] dom-ready main-frame, url:", url); } catch {}
-          this._injectGoodTubeIntoMainFrame(wc);
-        }
-      } catch (e) {
-        try { console.warn("[GoodTube] Main-frame dom-ready injection failed:", e); } catch {}
-      }
-    });
-
-    // Inject GoodTube into iframes after they finish loading.
-    // The session-wide preload injects into the main frame at document-start.
-    const tryInjectAllFrames = () => {
-      try {
-        const mainFrame = this.views[id].webContents.mainFrame;
-        if (!mainFrame) return;
-        const stack: WebFrameMain[] = [mainFrame];
-        let traversed = 0;
-        let injectedCount = 0;
-        for (let i = 0; i < stack.length; i++) {
-          const frame = stack[i];
-          traversed++;
-          // Queue children
-          try {
-            for (const child of frame.frames) stack.push(child);
-          } catch {}
-          // Inject only on target hosts
-          const frameUrl = String((frame as any).url || "");
-          // Skip main frame to avoid duplicate with preload injection
-          const isMain = frame === mainFrame;
-
-          if (!isMain && this._shouldInjectURL(frameUrl)) {
-            try { console.log("[GoodTube][Inject] iframe candidate:", frameUrl); } catch {}
-            this._injectGoodTubeIntoFrame(frame);
-            injectedCount++;
-          }
-        }
-        try { console.log("[GoodTube][Main] Frame traversal complete. traversed=", traversed, "injected=", injectedCount); } catch {}
-      } catch (e) {
-        try { console.warn("[GoodTube] Frame injection traversal failed:", e); } catch {}
-      }
-    };
-
-    this.views[id].webContents.on("did-frame-finish-load", tryInjectAllFrames);
-    this.views[id].webContents.on("did-navigate-in-page", () => {
-      try {
-        const wc = this.views[id].webContents;
-        const url = wc.getURL();
-        if (this._shouldInjectURL(url)) {
-          try { console.log("[GoodTube][Inject] did-navigate-in-page main-frame, url:", url); } catch {}
-          this._injectGoodTubeIntoMainFrame(wc);
-        }
-      } catch {}
-    });
     event.returnValue = id;
   };
 
@@ -224,6 +169,43 @@ export class BrowserViewManagerMain {
   _handleGoBack = (_: Electron.IpcMainEvent, id: number) => this.goBack(id);
 
   _handleReload = (_: Electron.IpcMainEvent, id: number) => this.reload(id);
+
+  _handleGetInjectorPreloadURL = (event: Electron.IpcMainEvent) => {
+    event.returnValue = this.getInjectorPreloadURL();
+  };
+
+  getInjectorPreloadURL(): string | undefined {
+    // This preload hosts the generic injector runtime plus site adapters.
+    const injectorPreloadFilename = "YouTubeInjectorPreload.js";
+
+    if (app.isPackaged) {
+      return path.join(process.resourcesPath, injectorPreloadFilename);
+    }
+
+    const candidatePaths = [
+      path.join(
+        app.getAppPath(),
+        "src",
+        "preload",
+        "managers",
+        injectorPreloadFilename
+      ),
+      path.join(process.cwd(), "src", "preload", "managers", injectorPreloadFilename),
+    ];
+
+    const resolved = candidatePaths.find((candidatePath) =>
+      fs.existsSync(candidatePath)
+    );
+
+    if (!resolved) {
+      console.warn(
+        "[BrowserViewManagerMain] Could not resolve injector preload path"
+      );
+      return undefined;
+    }
+
+    return resolved;
+  }
 
   /**
    * Create a new browser view and attach it to the current window
@@ -280,50 +262,6 @@ export class BrowserViewManagerMain {
     this.topView = view;
 
     return view.webContents.id;
-  }
-
-  /** Returns true if we should inject GoodTube into the given URL */
-  private _shouldInjectURL(url: string): boolean {
-    try {
-      const { hostname, protocol } = new URL(url);
-      if (!protocol.startsWith("http")) return false;
-      return (
-        hostname === "youtube.com" ||
-        hostname === "www.youtube.com" ||
-        hostname === "m.youtube.com" ||
-        hostname.endsWith(".youtube.com") ||
-        hostname === "wikipedia.org" ||
-        hostname.endsWith(".wikipedia.org")
-      );
-    } catch {
-      return false;
-    }
-  }
-
-  /** Inject cached GoodTube code into a specific frame context (idempotent). Does not fetch; relies on app-start warm. */
-  private async _injectGoodTubeIntoFrame(frame: WebFrameMain) {
-    try {
-      const code = getGoodtubeCode();
-      if (!code) return; // Only use cache warmed at app start
-      const b64 = Buffer.from(String(code), 'utf8').toString('base64');
-      const payload = `(() => { try { if (window.__GOODTUBE_INJECTED__) return; window.__GOODTUBE_INJECTED__ = true; try { if (window.trustedTypes && window.trustedTypes.createPolicy && !window.trustedTypes.defaultPolicy) { window.trustedTypes.createPolicy('default', { createHTML: s => s, createScriptURL: s => s, createScript: s => s }); } } catch {} const __g_b64__='${b64}'; let __g_code__ = atob(__g_b64__); try { if (window.trustedTypes && window.trustedTypes.defaultPolicy && window.trustedTypes.defaultPolicy.createScript) { __g_code__ = window.trustedTypes.defaultPolicy.createScript(__g_code__); } } catch {} (0, eval)(__g_code__); } catch (e) { try { console.warn('[GoodTube] execute userscript error:', e); } catch {} } })();`;
-      await frame.executeJavaScript(payload, true);
-    } catch (e) {
-      try { console.warn('[GoodTube] executeJavaScript failed for frame:', (frame as any).url, e); } catch {}
-    }
-  }
-
-  /** Inject GoodTube into the main frame via direct execution (avoids TT DOM sinks) */
-  private async _injectGoodTubeIntoMainFrame(wc: Electron.WebContents) {
-    try {
-      const code = getGoodtubeCode();
-      if (!code) return;
-      const b64 = Buffer.from(String(code), 'utf8').toString('base64');
-      const payload = `(() => { try { if (window.__GOODTUBE_INJECTED__) return; window.__GOODTUBE_INJECTED__ = true; try { if (window.trustedTypes && window.trustedTypes.createPolicy && !window.trustedTypes.defaultPolicy) { window.trustedTypes.createPolicy('default', { createHTML: s => s, createScriptURL: s => s, createScript: s => s }); } } catch {} const __g_b64__='${b64}'; let __g_code__ = atob(__g_b64__); try { if (window.trustedTypes && window.trustedTypes.defaultPolicy && window.trustedTypes.defaultPolicy.createScript) { __g_code__ = window.trustedTypes.defaultPolicy.createScript(__g_code__); } } catch {} (0, eval)(__g_code__); } catch (e) { try { console.warn('[GoodTube] execute userscript error (main):', e); } catch {} } })();`;
-      await wc.mainFrame.executeJavaScript(payload, true);
-    } catch (e) {
-      try { console.warn('[GoodTube] mainFrame.executeJavaScript failed:', e); } catch {}
-    }
   }
 
   removeBrowserView(id: number) {

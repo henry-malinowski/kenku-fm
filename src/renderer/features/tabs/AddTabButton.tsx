@@ -12,12 +12,14 @@ export function AddTabButton() {
 
   async function handleAddClick() {
     const bounds = getBounds();
+    const injectorPreload = window.kenku.browserViewGetInjectorPreloadURL();
     const id = await window.kenku.createBrowserView(
       "",
       bounds.x,
       bounds.y,
       bounds.width,
-      bounds.height
+      bounds.height,
+      injectorPreload
     );
     dispatch(
       addTab({

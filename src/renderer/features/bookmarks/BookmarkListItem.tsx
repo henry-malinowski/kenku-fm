@@ -26,12 +26,14 @@ export function BookmarkListItem({ bookmark, shadow }: BookmarkListItemProps) {
 
   async function select() {
     const bounds = getBounds();
+    const injectorPreload = window.kenku.browserViewGetInjectorPreloadURL();
     const id = await window.kenku.createBrowserView(
       bookmark.url,
       bounds.x,
       bounds.y,
       bounds.width,
       bounds.height,
+      injectorPreload,
     );
     dispatch(
       addTab({
