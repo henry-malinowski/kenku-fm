@@ -5,12 +5,9 @@ import { exit } from "node:process";
 async function createApp(version, keypairAlias, certfile) {
   const __dirname = import.meta.dirname;
   const parent = path.resolve(__dirname, "..", "..");
+
   try {
-    await createWindowsInstaller({
-      windowsSign: {
-        hashes: ["sha256"],
-        signWithParams: `/csp "DigiCert Signing Manager KSP" /kc ${keypairAlias} /f ${certfile} /tr http://timestamp.digicert.com /td SHA256 /fd SHA256`,
-      },
+    const params = {
       appDirectory: path.join(parent, "out", `Kenku FM-win32-${process.arch}`),
       outputDirectory: path.join(parent, "out", "windows"),
       loadingGif: path.join(parent, "src", "assets", "loading.gif"),
@@ -20,7 +17,26 @@ async function createApp(version, keypairAlias, certfile) {
       exe: "kenku-fm.exe",
       name: `kenku-fm-win32-${process.arch}`,
       setupExe: `kenku-fm-win32-${process.arch}-${version}.exe`,
-    });
+    };
+
+    // Only sign x64 builds until DigiCert SMCTL supports ARM64
+    if (process.arch === "x64") {
+      const normalizedCertPath = path.win32.normalize(certfile);
+      params.windowsSign = {
+        hashes: ["sha256"],
+        timestampServer: "http://timestamp.digicert.com",
+        signWithParams: [
+          "/csp",
+          "DigiCert Signing Manager KSP",
+          "/kc",
+          keypairAlias,
+          "/f",
+          normalizedCertPath,
+        ],
+      };
+    }
+
+    await createWindowsInstaller(params);
   } catch (e) {
     console.log(`Error occured: ${e.message}`);
     exit(1);

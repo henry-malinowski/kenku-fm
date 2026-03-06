@@ -96,12 +96,7 @@ const config = {
     {
       name: "@timfish/forge-externals-plugin",
       config: {
-        externals: [
-          "opusscript",
-          "prism-media",
-          "libsodium-wrappers",
-          "discord.js",
-        ],
+        externals: ["opusscript", "prism-media", "@snazzah/davey", "zlib-sync"],
         includeDeps: true,
       },
     },
