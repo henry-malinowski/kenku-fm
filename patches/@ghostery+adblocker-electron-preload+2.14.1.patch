@@ -2,7 +2,7 @@ diff --git a/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs b/
 index 3d17784..f260e0b 100644
 --- a/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs
 +++ b/node_modules/@ghostery/adblocker-electron-preload/dist/index.cjs
-@@ -212,10 +212,39 @@ class DOMMonitor {
+@@ -212,10 +212,40 @@ class DOMMonitor {
   * file, You can obtain one at https://mozilla.org/MPL/2.0/.
   */
  function injectCosmeticFilters(data) {
@@ -80,7 +80,7 @@ diff --git a/node_modules/@ghostery/adblocker-electron-preload/dist/index.js b/n
 index 00907ea..979a9b6 100644
 --- a/node_modules/@ghostery/adblocker-electron-preload/dist/index.js
 +++ b/node_modules/@ghostery/adblocker-electron-preload/dist/index.js
-@@ -210,10 +210,39 @@ class DOMMonitor {
+@@ -210,10 +210,40 @@ class DOMMonitor {
   * file, You can obtain one at https://mozilla.org/MPL/2.0/.
   */
  function injectCosmeticFilters(data) {
